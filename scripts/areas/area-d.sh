@@ -316,11 +316,13 @@ step_runner_exec_invalid_version() {
 }
 
 step_runner_exec_missing_required_field() {
-  # Same confirmed product decision as step_runner_exec_missing_body — an
-  # explicit {} missing the "name" the workflow's input.schema requires is
-  # expected to be accepted and run with "name" treated as empty, not
-  # rejected with a schema-validation error.
-  _runner_exec_graceful_empty_case runner_missing_required_field "Runner exec: input missing the required 'name' field is accepted and runs with it treated as empty" \
+  # Unlike step_runner_exec_missing_body (no body at all), an explicit {}
+  # that's missing the "name" the workflow's input.schema declares required
+  # is expected to be rejected with a 4xx schema-validation error. The Runner
+  # does not currently do this — definition.instance(request) is called
+  # directly with no schema-validation step, so this is intentionally
+  # expected to FAIL until that validation gap is fixed upstream.
+  _runner_exec_negative_case runner_missing_required_field "Runner exec: input missing the required 'name' field should be rejected" \
     "$(_runner_exec_url true)" "runner-exec-missing-required-field.json" \
     -H 'Content-Type: application/json' -d '{}'
 }
