@@ -231,6 +231,29 @@ step_runner_exec_valid_wait_false() {
   return 0
 }
 
+_runner_exec_graceful_empty_case() {
+  local result_id="$1" description="$2" url="$3" out_name="$4"
+  shift 4
+  local out="${EVIDENCE_DIR}/${out_name}"
+  http_post "$url" "$out" "$@"
+
+  if [ "$CURL_EXIT" -ne 0 ]; then
+    record_result "$result_id" "$description" FAIL "curl exit ${CURL_EXIT}, see ${out_name}"
+    return 1
+  fi
+  if [ "$HTTP_STATUS" != "200" ]; then
+    record_result "$result_id" "$description" FAIL "expected 200, got ${HTTP_STATUS}, see ${out_name}"
+    return 1
+  fi
+  if ! http_body_contains "$out" '"status":"COMPLETED"'; then
+    record_result "$result_id" "$description" FAIL "expected a COMPLETED workflow, see ${out_name}"
+    return 1
+  fi
+
+  record_result "$result_id" "$description" PASS "status=200, workflow completed with the missing field treated as empty, see ${out_name}"
+  return 0
+}
+
 _runner_exec_negative_case() {
   local result_id="$1" description="$2" url="$3" out_name="$4"
   shift 4
@@ -256,7 +279,12 @@ _runner_exec_negative_case() {
 }
 
 step_runner_exec_missing_body() {
-  _runner_exec_negative_case runner_missing_body "Runner exec: missing body" \
+  # Confirmed product decision: the Runner doesn't validate input against the
+  # workflow's declared schema before starting (see RunnerExecResource in
+  # quarkiverse/quarkus-flow — definition.instance(request) is called
+  # directly, with no schema-validation step). A missing body is expected to
+  # be accepted and run with the field(s) treated as empty, not rejected.
+  _runner_exec_graceful_empty_case runner_missing_body "Runner exec: missing body is accepted and runs with the input treated as empty" \
     "$(_runner_exec_url true)" "runner-exec-missing-body.json" \
     -H 'Content-Type: application/json'
 }
@@ -287,9 +315,13 @@ step_runner_exec_invalid_version() {
     -H 'Content-Type: application/json' -d '{"name":"Runner"}'
 }
 
-step_runner_exec_schema_violation() {
-  _runner_exec_negative_case runner_schema_violation "Runner exec: input violates schema (missing required field)" \
-    "$(_runner_exec_url true)" "runner-exec-schema-violation.json" \
+step_runner_exec_missing_required_field() {
+  # Same confirmed product decision as step_runner_exec_missing_body — an
+  # explicit {} missing the "name" the workflow's input.schema requires is
+  # expected to be accepted and run with "name" treated as empty, not
+  # rejected with a schema-validation error.
+  _runner_exec_graceful_empty_case runner_missing_required_field "Runner exec: input missing the required 'name' field is accepted and runs with it treated as empty" \
+    "$(_runner_exec_url true)" "runner-exec-missing-required-field.json" \
     -H 'Content-Type: application/json' -d '{}'
 }
 
@@ -365,7 +397,7 @@ main() {
   step_runner_exec_wrong_content_type || true
   step_runner_exec_unknown_workflow || true
   step_runner_exec_invalid_version || true
-  step_runner_exec_schema_violation || true
+  step_runner_exec_missing_required_field || true
   step_openapi_reachable || true
   step_swagger_ui_reachable || true
 }
