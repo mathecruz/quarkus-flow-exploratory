@@ -4,6 +4,9 @@ on:
   push:
     branches: [main]
   pull_request:
+  schedule:
+    # Daily exploratory run at 03:00 UTC, independent of any push/PR activity.
+    - cron: "0 3 * * *"
   workflow_dispatch:
     inputs:
       qf_version:
@@ -142,9 +145,60 @@ jobs:
           if-no-files-found: warn
           retention-days: 14
 
+  area-d:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    outputs:
+      run_id: ${{ steps.locate-run.outputs.run_id }}
+    env:
+      # Same shared config as area-a — see its comment above.
+      QF_VERSION: ${{ inputs.qf_version || vars.QF_VERSION }}
+      QUARKUS_PLATFORM_VERSION: ${{ inputs.quarkus_platform_version || vars.QUARKUS_PLATFORM_VERSION }}
+      TEST_GROUP_ID: ${{ inputs.test_group_id || vars.TEST_GROUP_ID }}
+      TEST_ARTIFACT_ID: ${{ inputs.test_artifact_id || vars.TEST_ARTIFACT_ID }}
+      APP_PORT: ${{ inputs.app_port || vars.APP_PORT }}
+      READY_TIMEOUT_SECONDS: ${{ vars.READY_TIMEOUT_SECONDS }}
+      LIVE_RELOAD_TIMEOUT_SECONDS: ${{ vars.LIVE_RELOAD_TIMEOUT_SECONDS }}
+      LIVE_RELOAD_POLL_INTERVAL_SECONDS: ${{ vars.LIVE_RELOAD_POLL_INTERVAL_SECONDS }}
+      HTTP_TIMEOUT_SECONDS: ${{ vars.HTTP_TIMEOUT_SECONDS }}
+      GRACEFUL_STOP_SECONDS: ${{ vars.GRACEFUL_STOP_SECONDS }}
+      RETRY_MAX_ATTEMPTS: ${{ vars.RETRY_MAX_ATTEMPTS }}
+      RETRY_DELAY_SECONDS: ${{ vars.RETRY_DELAY_SECONDS }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/setup-flow-env
+
+      - name: Run Area D automation
+        run: ./scripts/areas/area-d.sh
+
+      - name: Locate run evidence dir
+        id: locate-run
+        if: always()
+        run: |
+          run_id="$(ls -1 evidence/area-d | sort | tail -1)"
+          echo "run_id=${run_id}" >> "$GITHUB_OUTPUT"
+
+      - name: Upload evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: area-d-evidence-${{ github.run_id }}
+          path: evidence/area-d
+          if-no-files-found: warn
+          retention-days: 14
+
+      - name: Upload latest run evidence (for report publishing)
+        if: always() && steps.locate-run.outputs.run_id != ''
+        uses: actions/upload-artifact@v4
+        with:
+          name: area-d-latest-run
+          path: evidence/area-d/${{ steps.locate-run.outputs.run_id }}
+          if-no-files-found: warn
+          retention-days: 14
+
   publish-report:
-    needs: [area-a, area-c]
-    if: always() && (needs.area-a.outputs.run_id != '' || needs.area-c.outputs.run_id != '') && github.event_name == 'push' && github.ref == 'refs/heads/main'
+    needs: [area-a, area-c, area-d]
+    if: always() && (needs.area-a.outputs.run_id != '' || needs.area-c.outputs.run_id != '' || needs.area-d.outputs.run_id != '') && (github.event_name == 'push' || github.event_name == 'schedule') && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -170,6 +224,13 @@ jobs:
           name: area-c-latest-run
           path: latest-run/area-c
 
+      - name: Download area-d latest run
+        if: needs.area-d.outputs.run_id != ''
+        uses: actions/download-artifact@v4
+        with:
+          name: area-d-latest-run
+          path: latest-run/area-d
+
       - name: Render reports and landing page
         run: |
           mkdir -p site
@@ -183,6 +244,11 @@ jobs:
             cp latest-run/area-c/*.png site/area-c/ 2>/dev/null || true
             ./scripts/render-report-html.sh area-c latest-run/area-c site/area-c/index.html
           fi
+          if [ -f latest-run/area-d/results.tsv ]; then
+            mkdir -p site/area-d
+            cp latest-run/area-d/*.png site/area-d/ 2>/dev/null || true
+            ./scripts/render-report-html.sh area-d latest-run/area-d site/area-d/index.html
+          fi
           ./scripts/render-index-html.sh site site/index.html
 
       - uses: actions/configure-pages@v5
@@ -194,3 +260,46 @@ jobs:
       - name: Deploy to GitHub Pages
         id: deployment
         uses: actions/deploy-pages@v4
+
+  notify-on-failure:
+    needs: [area-a, area-c, area-d]
+    # Only for runs that represent the actual state of main (a push to main,
+    # the daily schedule, or a manual dispatch against main) — not every PR,
+    # where a red run is often just work in progress.
+    if: >-
+      always() &&
+      (needs.area-a.result == 'failure' || needs.area-c.result == 'failure' || needs.area-d.result == 'failure') &&
+      (github.event_name == 'push' || github.event_name == 'schedule' || github.event_name == 'workflow_dispatch') &&
+      github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      issues: write
+    steps:
+      - name: Open an issue for the failing run
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
+          AREA_A_RESULT: ${{ needs.area-a.result }}
+          AREA_C_RESULT: ${{ needs.area-c.result }}
+          AREA_D_RESULT: ${{ needs.area-d.result }}
+          EVENT_NAME: ${{ github.event_name }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          set -euo pipefail
+          title="Exploratory run failed — $(date -u +%Y-%m-%dT%H:%MZ) (${EVENT_NAME})"
+          body="$(cat <<BODY
+          One or more exploratory areas failed in this run.
+
+          | Area | Result |
+          |---|---|
+          | area-a | ${AREA_A_RESULT} |
+          | area-c | ${AREA_C_RESULT} |
+          | area-d | ${AREA_D_RESULT} |
+
+          Workflow run: ${RUN_URL}
+
+          /cc @quarkiverse/quarkiverse-flow — flagging in case this points at a quarkus-flow (or quarkus-flow-runner) regression rather than an issue in this automation. Note: this repository isn't under the quarkiverse GitHub org, so this mention likely won't trigger a notification for the team — see https://github.com/orgs/quarkiverse/teams/quarkiverse-flow directly.
+          BODY
+          )"
+          gh issue create --title "$title" --body "$body"

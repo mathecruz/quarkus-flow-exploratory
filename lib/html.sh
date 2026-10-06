@@ -38,7 +38,7 @@ ${extra_css}
 </head>
 <body>
 <header class="bx--header" role="banner" aria-label="Quarkus Flow Exploratory">
-  <a class="bx--header__name" href="https://github.com/mcruzdev/quarkus-flow-exploratory">
+  <a class="bx--header__name" href="https://github.com/mathecruz/quarkus-flow-exploratory">
     <span class="bx--header__name--prefix">Quarkus&nbsp;Flow&nbsp;</span>&nbsp;Exploratory
   </a>
 </header>

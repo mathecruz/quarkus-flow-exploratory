@@ -1,0 +1,21 @@
+document:
+  dsl: '1.1.0'
+  namespace: qe
+  name: greet
+  version: '1.1.0'
+
+input:
+  schema:
+    format: json
+    document:
+      type: object
+      required:
+        - name
+      properties:
+        name:
+          type: string
+
+do:
+  - buildGreeting:
+      set:
+        message: '${ "Hello, " + .name + "!" }'

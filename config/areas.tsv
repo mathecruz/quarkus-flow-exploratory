@@ -1,3 +1,4 @@
 area_id	title	description
 area-a	Area A — Local Developer Workflow	Generate a project via the Maven plugin, add quarkus-flow, write a Java DSL workflow, compile, run quarkus:dev, and verify endpoints, Dev UI, and live reload.
 area-c	Area C — Dev UI and Local Tracing	Execute a multi-task workflow from the Dev UI with valid and invalid input, verify trace log output, and confirm live reload.
+area-d	Area D — REST and Runner Execution	Execute workflows over HTTP via a custom REST resource and the quarkus-flow-runner exec endpoint, covering valid sync/async execution, invalid-input handling, and OpenAPI/Swagger exposure.

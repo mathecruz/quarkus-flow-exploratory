@@ -4,7 +4,7 @@ Bash automation for the [Quarkus Flow Exploratory Testing Guide](https://docs.qu
 
 Runs locally and in CI (GitHub Actions) — see [`.github/workflows/exploratory.yml`](.github/workflows/exploratory.yml).
 
-**Latest run report:** https://mcruzdev.github.io/quarkus-flow-exploratory/ (a landing page listing every scenario, published automatically after every push to `main` — see [Published report](#published-report)).
+**Latest run report:** https://mathecruz.github.io/quarkus-flow-exploratory/ (a landing page listing every scenario, published automatically after every push to `main` — see [Published report](#published-report)).
 
 ## What Area A validates
 
@@ -113,7 +113,7 @@ Adding Area C on top of Area A was an exercise in not duplicating what already e
 
 ## Published report
 
-Every push to `main` runs the `publish-report` job ([`.github/workflows/exploratory.yml`](.github/workflows/exploratory.yml)), which downloads each area's latest run evidence, renders each into its own page via [`scripts/render-report-html.sh`](scripts/render-report-html.sh) `<area_id>` — styled with [IBM's Carbon Design System](https://carbondesignsystem.com/) (`carbon-components` loaded from a CDN; this is a real published page, not a sandboxed artifact, so an external stylesheet is fine) — and renders a landing page via [`scripts/render-index-html.sh`](scripts/render-index-html.sh) linking to whichever areas actually published this run. Deploys the whole thing to GitHub Pages: **https://mcruzdev.github.io/quarkus-flow-exploratory/**. It always reflects the most recent run on `main` — a failed run still gets published, since a red result is useful information too. Pull request runs are not published (only their evidence artifact is uploaded, per the existing behavior).
+Every push to `main` runs the `publish-report` job ([`.github/workflows/exploratory.yml`](.github/workflows/exploratory.yml)), which downloads each area's latest run evidence, renders each into its own page via [`scripts/render-report-html.sh`](scripts/render-report-html.sh) `<area_id>` — styled with [IBM's Carbon Design System](https://carbondesignsystem.com/) (`carbon-components` loaded from a CDN; this is a real published page, not a sandboxed artifact, so an external stylesheet is fine) — and renders a landing page via [`scripts/render-index-html.sh`](scripts/render-index-html.sh) linking to whichever areas actually published this run. Deploys the whole thing to GitHub Pages: **https://mathecruz.github.io/quarkus-flow-exploratory/**. It always reflects the most recent run on `main` — a failed run still gets published, since a red result is useful information too. Pull request runs are not published (only their evidence artifact is uploaded, per the existing behavior).
 
 ## Result Legend
 

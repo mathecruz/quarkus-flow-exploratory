@@ -93,6 +93,38 @@ bootstrap_write_java_dsl_sources() {
   return 0
 }
 
+_bootstrap_mvn_add_extension() {
+  local gav="$1" log_file="$2"
+  (cd "$PROJECT_DIR" && ./mvnw -B -q quarkus:add-extension \
+    -Dextensions="${gav}") \
+    >> "${log_file}" 2>&1
+}
+
+# bootstrap_add_extension — adds an arbitrary extension GAV (no assumed
+# version; relies on whatever platform BOM is already imported). Caller
+# supplies its own result id/description/log file name so areas adding
+# multiple extensions in one run don't collide. grep_pattern (if given) is
+# checked against pom.xml in place of the GAV's artifact id substring.
+bootstrap_add_extension() {
+  local gav="$1" result_id="$2" description="$3" log_name="$4" grep_pattern="${5:-}"
+  local log_file="${EVIDENCE_DIR}/${log_name}"
+  : > "$log_file"
+
+  if ! retry "$RETRY_MAX_ATTEMPTS" "$RETRY_DELAY_SECONDS" _bootstrap_mvn_add_extension "$gav" "$log_file"; then
+    record_result "$result_id" "$description" BLOCKED "extension add failed after retries, see ${log_name}"
+    return 1
+  fi
+
+  local needle="${grep_pattern:-$(echo "$gav" | cut -d: -f2)}"
+  if ! grep -q "$needle" "${PROJECT_DIR}/pom.xml"; then
+    record_result "$result_id" "$description" FAIL "'${needle}' not found in pom.xml after add-extension"
+    return 1
+  fi
+
+  record_result "$result_id" "$description" PASS ""
+  return 0
+}
+
 # bootstrap_compile — plain `clean compile`. Records result id "compile".
 bootstrap_compile() {
   if ! (cd "$PROJECT_DIR" && ./mvnw -B clean compile) > "${EVIDENCE_DIR}/compile.log" 2>&1; then
