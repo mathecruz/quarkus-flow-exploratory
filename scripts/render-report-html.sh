@@ -55,8 +55,11 @@ status_tag_color() {
 
 REPORT_CSS='  .run-meta { color: #525252; margin: 0.5rem 0 2.5rem; }
   .run-meta code { font-family: '"'"'IBM Plex Mono'"'"', monospace; }
-  .bx--data-table-container { margin-bottom: 1rem; }
+  .bx--data-table-container { margin-bottom: 1rem; overflow-x: auto; }
+  .bx--data-table { table-layout: auto; }
   .bx--data-table td { vertical-align: top; }
+  .bx--data-table td:last-child { word-break: break-word; }
+  .bx--data-table .bx--tag { white-space: nowrap; }
   img.evidence-shot { max-width: 100%; display: block; margin: 1rem 0; border: 1px solid #e0e0e0; }
   details.env-details { border: 1px solid #e0e0e0; padding: 0 1rem 1rem; margin-bottom: 1rem; }
   details.env-details summary { cursor: pointer; padding: 1rem 0; font-weight: 600; }
