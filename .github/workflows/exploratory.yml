@@ -276,7 +276,7 @@ jobs:
       contents: read
       issues: write
     steps:
-      - name: Open an issue for the failing run
+      - name: Open or update the tracking issue for failing runs
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GH_REPO: ${{ github.repository }}
@@ -287,9 +287,14 @@ jobs:
           RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
         run: |
           set -euo pipefail
-          title="Exploratory run failed — $(date -u +%Y-%m-%dT%H:%MZ) (${EVENT_NAME})"
+          # One stable, reused issue tracks failing runs (matched by exact
+          # title) rather than opening a new issue per run — area-d's two
+          # known quarkus-flow-runner findings (schema validation isn't
+          # enforced on the exec endpoint) are expected to keep failing
+          # until that's fixed upstream, so a per-run issue would spam.
+          title="Exploratory run failing"
           body="$(cat <<BODY
-          One or more exploratory areas failed in this run.
+          One or more exploratory areas failed as of $(date -u +%Y-%m-%dT%H:%MZ) (${EVENT_NAME}).
 
           | Area | Result |
           |---|---|
@@ -302,4 +307,9 @@ jobs:
           /cc @quarkiverse/quarkiverse-flow — flagging in case this points at a quarkus-flow (or quarkus-flow-runner) regression rather than an issue in this automation. Note: this repository isn't under the quarkiverse GitHub org, so this mention likely won't trigger a notification for the team — see https://github.com/orgs/quarkiverse/teams/quarkiverse-flow directly.
           BODY
           )"
-          gh issue create --title "$title" --body "$body"
+          existing="$(gh issue list --search "is:open in:title \"${title}\"" --json number,title --jq ".[] | select(.title == \"${title}\") | .number" | head -1)"
+          if [ -n "$existing" ]; then
+            gh issue comment "$existing" --body "$body"
+          else
+            gh issue create --title "$title" --body "$body"
+          fi
